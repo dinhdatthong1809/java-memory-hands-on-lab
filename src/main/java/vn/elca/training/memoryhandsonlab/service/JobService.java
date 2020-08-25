@@ -18,6 +18,7 @@ import vn.elca.training.memoryhandsonlab.repository.StudentRepository;
 
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.LinkedList;
@@ -42,16 +43,16 @@ public class JobService implements InitializingBean {
         List<Pair<Long, Student>> studentsByIdJsonData = parseStudentsFromFile();
         StopWatch stopWatch = new StopWatch();
         stopWatch.start();
-        
+
         Map<Long, Student> dbStudents = studentRepository.findAllById(studentsByIdJsonData
-                                                         .stream()
-                                                         .map(Pair::getLeft)
-                                                         .collect(Collectors.toList()))
+                                                                      .stream()
+                                                                      .map(Pair::getLeft)
+                                                                      .collect(Collectors.toList()))
                                                          .stream()
                                                          .collect(Collectors.toMap(Student::getId, student -> student));
-        
+
         log.info(" === Found {} students from DB", dbStudents.size());
-        
+
         int curLineNumber = 0;
         AtomicInteger nbUpdatedStudents = new AtomicInteger(0);
         AtomicInteger nbNewStudents = new AtomicInteger(0);
@@ -65,7 +66,7 @@ public class JobService implements InitializingBean {
                 log.error("Error happens when processing data of line {}.", curLineNumber);
             }
         }
-        
+
         log.info(" === inserted {} audit items into DB", studentAudits.size());
         stopWatch.stop();
         buildSummaryLog(stopWatch.getTime(), nbUpdatedStudents, nbNewStudents);
@@ -74,7 +75,7 @@ public class JobService implements InitializingBean {
     private void saveAuditInfo(List<StudentAudit> studentAudits, Student savedStudent) {
         List<StudentAudit> audits = studentAuditRepository.findAllByStudentId(savedStudent.getId());
         audits.sort(Comparator.comparing(StudentAudit::getCreatedDate).reversed());
-        Long prevItemId = Optional.ofNullable(audits.size() > 0 ? audits.iterator().next() : null)
+        Long prevItemId = Optional.ofNullable(!audits.isEmpty() ? audits.iterator().next() : null)
                                   .map(StudentAudit::getId)
                                   .orElse(null);
         
@@ -94,13 +95,17 @@ public class JobService implements InitializingBean {
     private List<Pair<Long, Student>> parseStudentsFromFile() throws IOException {
         ObjectMapper jsonMapper = new ObjectMapper();
         return IOUtils.readLines(getClass().getResourceAsStream("/STUDENT_DATA.txt"), Charset.forName("UTF-8"))
-                      .parallelStream().map(line -> {
+                      .parallelStream()
+                      .map(line -> {
                           try {
                               return jsonMapper.readValue(line, Student.class);
                           }
                           catch (JsonProcessingException e) {
                               return null;
                           }
-                      }).map(x -> Pair.of(x.getId(), x)).collect(Collectors.toList());
+                      })
+                      .map(x -> Pair.of(x.getId(), x))
+                      .collect(Collectors.toList());
     }
+    
 }
